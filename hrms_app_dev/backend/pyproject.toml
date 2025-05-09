@@ -1,0 +1,45 @@
+[tool.poetry]
+name = "attendance-tracker-backend"
+version = "0.2.1"
+description = "Geofence-based attendance tracking system, with admin login and user login functionality. The system tracks attendance based on geofencing and provides an admin panel for managing users and attendance records."
+readme = "README.md"
+authors = ["Debshishu Ghosh <debghosh0506@gmail.com>"]
+packages = [
+    { include = "app"},
+    # { include = "app.api" },
+    # { include = "app.core" },
+    # { include = "app.db" },
+    # { include = "app.models" },
+    # { include = "app.schemas" },
+    # { include = "app.services" },
+    # { include = "app.utils" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.95.0"
+uvicorn = "^0.22.0"
+sqlalchemy = "^2.0.0"
+pydantic = {extras = ["email"], version = "^1.10.7"}
+python-jose = "^3.3.0"
+passlib = "^1.7.4"
+python-multipart = "^0.0.6"
+bcrypt = "^4.0.1"
+alembic = "^1.10.0"
+psycopg2-binary = "^2.9.6"
+haversine = "^2.8.0"
+python-dotenv = "^1.0.0"
+pyodbc = "^5.2.0"
+asyncodbc = "^0.1.1"
+httpx = "^0.28.1"
+redis = "^6.0.0"
+fastapi-limiter = "^0.1.6"
+fastapi-cache = "^0.1.0"
+ldap3 = "^2.9.1"
+
+[tool.poetry.group]
+dev = { dependencies = { pytest = "^7.0.0", black = "^23.0.0", isort = "^5.0.0", mypy = "^1.0.0", flake8 = "^6.0.0" } }
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Attendance Tracker</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Feather Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Admin Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <i data-feather="shield"></i>
+                    <h2>Admin Panel</h2>
+                </div>
+                <div class="admin-profile">
+                    <i data-feather="user"></i>
+                    <span id="admin-name">Loading...</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="#" class="nav-link active" data-section="dashboard">
+                            <i data-feather="grid"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="users">
+                            <i data-feather="users"></i>
+                            <span>Users</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="offices">
+                            <i data-feather="home"></i>
+                            <span>Offices</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="activity">
+                            <i data-feather="activity"></i>
+                            <span>Activity Log</span>
+                        </a>
+                    </li>
+                    <li id="admin-management-link" class="nav-item" style="display: none;">
+                        <a href="#" class="nav-link" data-section="admins">
+                            <i data-feather="key"></i>
+                            <span>Admin Management</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <a href="#" id="admin-logout" class="footer-link">
+                    <i data-feather="log-out"></i>
+                    <span>Logout</span>
+                </a>
+                <a href="index.html" class="footer-link">
+                    <i data-feather="arrow-left"></i>
+                    <span>Back to App</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="content-header">
+                <div class="title-section">
+                    <h1 id="section-title">Dashboard</h1>
+                    <span class="breadcrumb">Admin / <span id="breadcrumb-section">Dashboard</span></span>
+                </div>
+                <div id="section-actions" class="action-buttons">
+                    <!-- Dynamic action buttons will be added here -->
+                </div>
+            </header>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="content-section active">
+                <div class="stat-cards">
+                    <div class="stat-card">
+                        <div class="stat-icon users">
+                            <i data-feather="users"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Users</h3>
+                            <div class="stat-value" id="total-users">0</div>
+                            <div class="stat-meta">
+                                <span id="active-users">0 active</span> / 
+                                <span id="admin-users">0 admins</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon offices">
+                            <i data-feather="home"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Offices</h3>
+                            <div class="stat-value" id="total-offices">0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon attendance">
+                            <i data-feather="calendar"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Today's Attendance</h3>
+                            <div class="stat-value" id="today-attendance">0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon logins">
+                            <i data-feather="log-in"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Current Logins</h3>
+                            <div class="stat-value" id="active-logins">0</div>
+                            <div class="stat-meta">
+                                <span id="today-logins">0 today</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card activity-card">
+                    <div class="card-header">
+                        <h3><i data-feather="clock"></i> Recent Activity</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="recent-activity-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Time</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-activity-body">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="users-section" class="content-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i data-feather="users"></i> User Management</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="users-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Full Name</th>
+                                    <th>Status</th>
+                                    <th>Role</th>
+                                    <th>Last Login</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Offices Section -->
+            <section id="offices-section" class="content-section">
+                <div class="card map-card">
+                    <div class="card-header">
+                        <h3><i data-feather="map-pin"></i> Office Locations</h3>
+                    </div>
+                    <div id="admin-map" class="admin-map"></div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i data-feather="list"></i> Offices List</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="offices-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Address</th>
+                                    <th>Coordinates</th>
+                                    <th>Radius (m)</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="offices-table-body">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Activity Log Section -->
+            <section id="activity-section" class="content-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i data-feather="filter"></i> Filters</h3>
+                    </div>
+                    <div class="filters">
+                        <div class="form-group">
+                            <label for="activity-user-filter">User</label>
+                            <div class="select-wrapper">
+                                <select id="activity-user-filter">
+                                    <option value="">All Users</option>
+                                    <!-- Options will be added dynamically -->
+                                </select>
+                                <i data-feather="chevron-down"></i>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="activity-type-filter">Activity Type</label>
+                            <div class="select-wrapper">
+                                <select id="activity-type-filter">
+                                    <option value="">All Activities</option>
+                                    <option value="login">Logins</option>
+                                    <option value="attendance">Attendance</option>
+                                </select>
+                                <i data-feather="chevron-down"></i>
+                            </div>
+                        </div>
+                        <button id="apply-filters" class="btn btn-primary">
+                            <i data-feather="filter"></i>
+                            <span>Apply Filters</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i data-feather="activity"></i> Activity Log</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="activity-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Activity Type</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th>Duration</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activity-table-body">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Management Section -->
+            <section id="admins-section" class="content-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i data-feather="shield"></i> Admin Management</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="admins-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Full Name</th>
+                                    <th>Status</th>
+                                    <th>Super Admin</th>
+                                    <th>Last Login</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admins-table-body">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal System -->
+    <div id="modal-backdrop" class="modal-backdrop"></div>
+    
+    <!-- User Modal -->
+    <div id="user-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="user-modal-title"><i data-feather="user-plus"></i> Add User</h2>
+                <button class="close-modal"><i data-feather="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="user-form" class="form">
+                    <input type="hidden" id="user-id">
+                    
+                    <div class="form-group">
+                        <label for="user-username">Username</label>
+                        <div class="input-wrapper">
+                            <i data-feather="user"></i>
+                            <input type="text" id="user-username" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="user-email">Email</label>
+                        <div class="input-wrapper">
+                            <i data-feather="mail"></i>
+                            <input type="email" id="user-email" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="user-fullname">Full Name</label>
+                        <div class="input-wrapper">
+                            <i data-feather="user-check"></i>
+                            <input type="text" id="user-fullname">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="user-password">Password</label>
+                        <div class="input-wrapper">
+                            <i data-feather="lock"></i>
+                            <input type="password" id="user-password">
+                        </div>
+                        <small class="helper-text">Leave blank to keep unchanged when editing.</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="user-active">Status</label>
+                        <div class="select-wrapper">
+                            <select id="user-active">
+                                <option value="true">Active</option>
+                                <option value="false">Inactive</option>
+                            </select>
+                            <i data-feather="chevron-down"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" id="user-admin-group">
+                        <label for="user-admin">Role</label>
+                        <div class="select-wrapper">
+                            <select id="user-admin">
+                                <option value="false">Regular User</option>
+                                <option value="true">Admin</option>
+                            </select>
+                            <i data-feather="chevron-down"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save"></i>
+                            <span>Save</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary close-modal">
+                            <i data-feather="x"></i>
+                            <span>Cancel</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Office Modal -->
+    <div id="office-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="office-modal-title"><i data-feather="home"></i> Add Office</h2>
+                <button class="close-modal"><i data-feather="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="office-form" class="form">
+                    <input type="hidden" id="office-id">
+                    
+                    <div class="form-group">
+                        <label for="office-name">Name</label>
+                        <div class="input-wrapper">
+                            <i data-feather="briefcase"></i>
+                            <input type="text" id="office-name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="office-address">Address</label>
+                        <div class="input-wrapper">
+                            <i data-feather="map-pin"></i>
+                            <input type="text" id="office-address" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="office-latitude">Latitude</label>
+                            <div class="input-wrapper">
+                                <i data-feather="navigation"></i>
+                                <input type="number" id="office-latitude" step="0.000001" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="office-longitude">Longitude</label>
+                            <div class="input-wrapper">
+                                <i data-feather="navigation"></i>
+                                <input type="number" id="office-longitude" step="0.000001" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="office-radius">Geofence Radius (meters)</label>
+                        <div class="input-wrapper">
+                            <i data-feather="circle"></i>
+                            <input type="number" id="office-radius" min="10" required>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save"></i>
+                            <span>Save</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary close-modal">
+                            <i data-feather="x"></i>
+                            <span>Cancel</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header warning">
+                <h2><i data-feather="alert-triangle"></i> Confirm Action</h2>
+                <button class="close-modal"><i data-feather="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message">Are you sure you want to proceed?</p>
+                <div class="modal-actions">
+                    <button id="confirm-yes" class="btn btn-danger">
+                        <i data-feather="check"></i>
+                        <span>Yes</span>
+                    </button>
+                    <button class="btn btn-secondary close-modal">
+                        <i data-feather="x"></i>
+                        <span>No</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-error-message" class="toast error-toast">
+        <i data-feather="alert-circle"></i>
+        <span class="toast-message"></span>
+        <button class="toast-close"><i data-feather="x"></i></button>
+    </div>
+
+    <!-- Leaflet JS for maps -->
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+    
+    <!-- Admin Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/admin/admin-auth.js"></script>
+    <script src="js/admin/admin-users.js"></script>
+    <script src="js/admin/admin-offices.js"></script>
+    <script src="js/admin/admin-activity.js"></script>
+    <script src="js/admin/admin-dashboard.js"></script>
+    <script src="js/admin/admin.js"></script>
+    
+    <script>
+        // Initialize Feather icons
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+        });
+    </script>
+</body>
+</html>
