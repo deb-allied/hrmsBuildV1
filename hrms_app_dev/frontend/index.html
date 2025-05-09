@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Tracker</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Feather Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="app-header">
+            <h1 class="logo">Attendance Tracker</h1>
+            <div class="user-info">
+                <span id="user-display" class="user-name">Not logged in</span>
+                <div class="user-actions">
+                    <button id="admin-btn" class="btn btn-outline" style="display: none;">
+                        <i data-feather="settings"></i>
+                        <span>Admin</span>
+                    </button>
+                    <button id="logout-btn" class="btn btn-outline btn-danger" style="display: none;">
+                        <i data-feather="log-out"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Login Form (shown by default) -->
+        <div id="login-container" class="card login-card">
+            <div class="card-header">
+                <h2>Welcome</h2>
+                <p class="subtext">Sign in to access your attendance dashboard</p>
+            </div>
+            <form id="login-form" class="form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <div class="input-wrapper">
+                        <i data-feather="user"></i>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="input-wrapper">
+                        <i data-feather="lock"></i>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Login</button>
+            </form>
+            <p class="helper-text">Please contact your administrator if you don't have an account.</p>
+        </div>
+
+        <!-- Dashboard (hidden by default) -->
+        <div id="dashboard-container" class="dashboard" style="display: none;">
+            <div class="dashboard-header">
+                <h2>Attendance Dashboard</h2>
+                <div class="action-buttons">
+                    <button id="check-in-btn" class="btn btn-success">
+                        <i data-feather="check-circle"></i>
+                        <span>Check In</span>
+                    </button>
+                    <button id="check-out-btn" class="btn btn-warning">
+                        <i data-feather="log-out"></i>
+                        <span>Check Out</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="cards-grid">
+                <div class="card status-card">
+                    <div class="card-icon">
+                        <i data-feather="activity"></i>
+                    </div>
+                    <div class="card-content">
+                        <h3>Current Status</h3>
+                        <p id="current-status" class="status-text">Not checked in</p>
+                    </div>
+                </div>
+            
+                <div class="card map-card">
+                    <h3><i data-feather="map-pin"></i> Location</h3>
+                    <div id="map" class="map"></div>
+                    <div class="map-controls">
+                        <button id="locate-btn" class="btn btn-info">
+                            <i data-feather="navigation"></i>
+                            <span>Locate Me</span>
+                        </button>
+                        <span id="coordinates" class="coordinates"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weekly Attendance Summary -->
+            <div class="card weekly-summary-card">
+                <div class="card-header">
+                    <h3><i data-feather="calendar"></i> Weekly Hours</h3>
+                    <div class="week-navigator">
+                        <button id="prev-week" class="btn btn-sm btn-outline">
+                            <i data-feather="chevron-left"></i>
+                        </button>
+                        <span id="week-display">This Week</span>
+                        <button id="next-week" class="btn btn-sm btn-outline">
+                            <i data-feather="chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="weekly-chart">
+                    <div class="chart-legend">
+                        <div class="legend-item">
+                            <span class="legend-color complete"></span>
+                            <span>Complete (8+ hours)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color partial"></span>
+                            <span>Partial (< 8 hours)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color threshold"></span>
+                            <span>8 Hour Threshold</span>
+                        </div>
+                    </div>
+                    <div class="days-grid">
+                        <div class="day-column">
+                            <div class="day-header">Mon</div>
+                            <div class="progress-container">
+                                <div class="hour-threshold"></div>
+                                <div class="progress-bar" id="monday-bar" data-hours="0"></div>
+                            </div>
+                            <div class="hours-label" id="monday-hours">0h</div>
+                        </div>
+                        <div class="day-column">
+                            <div class="day-header">Tue</div>
+                            <div class="progress-container">
+                                <div class="hour-threshold"></div>
+                                <div class="progress-bar" id="tuesday-bar" data-hours="0"></div>
+                            </div>
+                            <div class="hours-label" id="tuesday-hours">0h</div>
+                        </div>
+                        <div class="day-column">
+                            <div class="day-header">Wed</div>
+                            <div class="progress-container">
+                                <div class="hour-threshold"></div>
+                                <div class="progress-bar" id="wednesday-bar" data-hours="0"></div>
+                            </div>
+                            <div class="hours-label" id="wednesday-hours">0h</div>
+                        </div>
+                        <div class="day-column">
+                            <div class="day-header">Thu</div>
+                            <div class="progress-container">
+                                <div class="hour-threshold"></div>
+                                <div class="progress-bar" id="thursday-bar" data-hours="0"></div>
+                            </div>
+                            <div class="hours-label" id="thursday-hours">0h</div>
+                        </div>
+                        <div class="day-column">
+                            <div class="day-header">Fri</div>
+                            <div class="progress-container">
+                                <div class="hour-threshold"></div>
+                                <div class="progress-bar" id="friday-bar" data-hours="0"></div>
+                            </div>
+                            <div class="hours-label" id="friday-hours">0h</div>
+                        </div>
+                        <div class="day-column">
+                            <div class="day-header">Sat</div>
+                            <div class="progress-container">
+                                <div class="hour-threshold"></div>
+                                <div class="progress-bar" id="saturday-bar" data-hours="0"></div>
+                            </div>
+                            <div class="hours-label" id="saturday-hours">0h</div>
+                        </div>
+                        <div class="day-column">
+                            <div class="day-header">Sun</div>
+                            <div class="progress-container">
+                                <div class="hour-threshold"></div>
+                                <div class="progress-bar" id="sunday-bar" data-hours="0"></div>
+                            </div>
+                            <div class="hours-label" id="sunday-hours">0h</div>
+                        </div>
+                    </div>
+                    <div class="weekly-summary">
+                        <div class="weekly-total">
+                            <span>Weekly Total:</span>
+                            <span id="weekly-total-hours">0h</span>
+                        </div>
+                        <div class="weekly-target">
+                            <span>Target (40h):</span>
+                            <div class="target-progress-container">
+                                <div class="target-progress-bar" id="weekly-target-bar"></div>
+                            </div>
+                            <span id="weekly-completion">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card history-card">
+                <h3><i data-feather="clock"></i> Attendance History</h3>
+                <div class="table-container">
+                    <table id="history-table" class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Office</th>
+                                <th>Check-in Time</th>
+                                <th>Check-out Time</th>
+                                <th>Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body">
+                            <!-- Table rows will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-message" class="toast error-toast">
+            <i data-feather="alert-circle"></i>
+            <span class="toast-message"></span>
+            <button class="toast-close"><i data-feather="x"></i></button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS for maps -->
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+    
+    <!-- App Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/location.js"></script>
+    <script src="js/attendance.js"></script>
+    <script src="js/app.js"></script>
+    
+    <!-- Weekly Attendance Chart Script -->
+    <script>
+        // Initialize Weekly Attendance Chart
+        class WeeklyAttendanceChart {
+            constructor() {
+                // Days of the week mapping
+                this.daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                
+                // Threshold for complete day (8 hours)
+                this.hourThreshold = 8;
+                
+                // Reference to attendance service
+                this.attendanceService = window.attendanceService;
+                
+                // Date for displayed week
+                this.currentWeekStart = this.getStartOfWeek(new Date());
+                
+                // Initialize chart
+                this.initChart();
+            }
+            
+            /**
+             * Initialize chart and set up event listeners
+             */
+            initChart() {
+                // Set up event listeners for week navigation
+                document.getElementById('prev-week').addEventListener('click', () => this.navigateWeek(-1));
+                document.getElementById('next-week').addEventListener('click', () => this.navigateWeek(1));
+                
+                // Initial update
+                this.updateChart();
+                
+                // Set up periodic updates
+                setInterval(() => {
+                    // Only update if on current week and user is checked in
+                    if (this.isCurrentWeek() && this.attendanceService && 
+                        this.attendanceService.currentStatus && 
+                        this.attendanceService.currentStatus.checkedIn) {
+                        this.updateChart();
+                    }
+                }, 60000); // Update every minute
+            }
+            
+            /**
+             * Get the start date of the week (Sunday) for a given date
+             * @param {Date} date - The date to get the week start for
+             * @returns {Date} Start date of the week
+             */
+            getStartOfWeek(date) {
+                const result = new Date(date);
+                result.setDate(date.getDate() - date.getDay()); // Set to Sunday of the week
+                result.setHours(0, 0, 0, 0);
+                return result;
+            }
+            
+            /**
+             * Check if the current displayed week is the current week
+             * @returns {boolean} True if current week is displayed
+             */
+            isCurrentWeek() {
+                const now = new Date();
+                const currentWeekStart = this.getStartOfWeek(now);
+                return this.currentWeekStart.getTime() === currentWeekStart.getTime();
+            }
+            
+            /**
+             * Navigate to previous or next week
+             * @param {number} direction - Direction to navigate (-1 for previous, 1 for next)
+             */
+            navigateWeek(direction) {
+                // Clone current week start
+                const newWeekStart = new Date(this.currentWeekStart);
+                
+                // Add/subtract 7 days
+                newWeekStart.setDate(newWeekStart.getDate() + (7 * direction));
+                
+                // Update current week start
+                this.currentWeekStart = newWeekStart;
+                
+                // Update chart
+                this.updateChart();
+            }
+            
+            /**
+             * Update the week display text
+             */
+            updateWeekDisplay() {
+                const weekEnd = new Date(this.currentWeekStart);
+                weekEnd.setDate(weekEnd.getDate() + 6);
+                
+                // Format dates
+                const options = { month: 'short', day: 'numeric' };
+                const startStr = this.currentWeekStart.toLocaleDateString('en-US', options);
+                const endStr = weekEnd.toLocaleDateString('en-US', options);
+                
+                // Set the week display text
+                document.getElementById('week-display').textContent = `${startStr} - ${endStr}`;
+                
+                // Disable next week button if it's in the future
+                const now = new Date();
+                const nextWeekBtn = document.getElementById('next-week');
+                if (nextWeekBtn) {
+                    nextWeekBtn.disabled = this.currentWeekStart > this.getStartOfWeek(now);
+                }
+            }
+            
+            /**
+             * Update the chart with attendance data for the current week
+             */
+            async updateChart() {
+                try {
+                    // Update week display
+                    this.updateWeekDisplay();
+                    
+                    // Get attendance history
+                    let history = [];
+                    if (this.attendanceService) {
+                        try {
+                            history = await this.attendanceService.getAttendanceHistory();
+                        } catch (error) {
+                            console.error('Error getting attendance history:', error);
+                        }
+                    }
+                    
+                    // Filter history for the current week
+                    const weekEnd = new Date(this.currentWeekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 7);
+                    
+                    const weekHistory = history.filter(record => {
+                        const recordDate = new Date(record.date);
+                        return recordDate >= this.currentWeekStart && recordDate < weekEnd;
+                    });
+                    
+                    // Initialize hours per day
+                    const hoursPerDay = {
+                        sunday: 0,
+                        monday: 0,
+                        tuesday: 0,
+                        wednesday: 0,
+                        thursday: 0,
+                        friday: 0,
+                        saturday: 0
+                    };
+                    
+                    // Calculate hours for each day in the week
+                    weekHistory.forEach(record => {
+                        if (record.checkInTime && record.checkOutTime) {
+                            const checkInTime = new Date(record.checkInTime);
+                            const checkOutTime = new Date(record.checkOutTime);
+                            
+                            // Calculate duration in hours
+                            const durationMs = checkOutTime - checkInTime - (record.breakDuration || 0);
+                            const durationHours = durationMs / (1000 * 60 * 60);
+                            
+                            // Get day of week and add hours
+                            const dayOfWeek = this.daysOfWeek[new Date(record.date).getDay()];
+                            hoursPerDay[dayOfWeek] += durationHours;
+                        }
+                    });
+                    
+                    // Check for current day - if checked in but not checked out, calculate hours so far
+                    if (this.isCurrentWeek() && this.attendanceService.currentStatus.checkedIn) {
+                        const now = new Date();
+                        const today = this.daysOfWeek[now.getDay()];
+                        
+                        // Get check-in time
+                        const checkInTime = new Date(this.attendanceService.currentStatus.checkInTime);
+                        
+                        // Calculate hours worked so far
+                        let currentDuration = now - checkInTime;
+                        
+                        // Subtract break time if applicable
+                        if (this.attendanceService.currentStatus.onBreak) {
+                            const breakStartTime = new Date(this.attendanceService.currentStatus.breakStartTime);
+                            currentDuration -= (now - breakStartTime);
+                        }
+                        
+                        // Subtract any accumulated break duration
+                        currentDuration -= (this.attendanceService.currentStatus.breakDuration || 0);
+                        
+                        // Convert to hours and add to today's total
+                        const currentHours = currentDuration / (1000 * 60 * 60);
+                        hoursPerDay[today] += currentHours;
+                    }
+                    
+                    // Calculate weekly total
+                    let weeklyTotal = 0;
+                    Object.values(hoursPerDay).forEach(hours => {
+                        weeklyTotal += hours;
+                    });
+                    
+                    // Update the bars and labels
+                    Object.entries(hoursPerDay).forEach(([day, hours]) => {
+                        // Get elements
+                        const bar = document.getElementById(`${day}-bar`);
+                        const hoursLabel = document.getElementById(`${day}-hours`);
+                        
+                        if (bar && hoursLabel) {
+                            // Calculate bar height (max 100%)
+                            const heightPercentage = Math.min(100, (hours / 10) * 100);
+                            
+                            // Update bar
+                            bar.style.height = `${heightPercentage}%`;
+                            bar.dataset.hours = hours.toFixed(1);
+                            
+                            // Set bar class based on hours threshold
+                            if (hours >= this.hourThreshold) {
+                                bar.className = 'progress-bar complete';
+                            } else if (hours > 0) {
+                                bar.className = 'progress-bar partial';
+                            } else {
+                                bar.className = 'progress-bar';
+                            }
+                            
+                            // Update hours label
+                            hoursLabel.textContent = `${hours.toFixed(1)}h`;
+                        }
+                    });
+                    
+                    // Update weekly total and completion
+                    document.getElementById('weekly-total-hours').textContent = `${weeklyTotal.toFixed(1)}h`;
+                    
+                    // Calculate and update weekly completion percentage (40h target)
+                    const weeklyPercentage = Math.min(100, (weeklyTotal / 40) * 100);
+                    document.getElementById('weekly-target-bar').style.width = `${weeklyPercentage}%`;
+                    document.getElementById('weekly-completion').textContent = `${weeklyPercentage.toFixed(0)}%`;
+                } catch (error) {
+                    console.error('Error updating weekly chart:', error);
+                }
+            }
+        }
+
+        // Initialize weekly chart when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+            
+            // Initialize chart when user is logged in
+            const checkAuth = () => {
+                if (window.AuthService && window.AuthService.isAuthenticated() && 
+                    window.attendanceService) {
+                    new WeeklyAttendanceChart();
+                } else {
+                    // Retry in a moment
+                    setTimeout(checkAuth, 500);
+                }
+            };
+            
+            checkAuth();
+        });
+    </script>
+
+    <!-- Geofence Warning Modal -->
+    <div id="geofence-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header warning">
+                <h2><i data-feather="alert-triangle"></i> Location Alert</h2>
+                <button class="close-modal" id="close-geofence-modal"><i data-feather="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="warning-icon">
+                    <i data-feather="map-pin"></i>
+                </div>
+                <p class="warning-message">Cannot check in: You are outside the office geofence.</p>
+                <p class="warning-details">Please make sure you are within the designated office area to check in.</p>
+                <div class="modal-actions">
+                    <button class="btn btn-primary close-modal">
+                        <i data-feather="check"></i>
+                        <span>Understood</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal backdrop -->
+    <div id="modal-backdrop" class="modal-backdrop"></div>
+</body>
+</html>
