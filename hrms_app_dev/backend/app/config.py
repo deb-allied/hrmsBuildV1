@@ -54,5 +54,16 @@ class Settings(BaseSettings):
     class Config:
         case_sensitive = True
 
+    # LDAP SETTINGS
+    LDAP_SERVER: str = os.getenv("LDAP_SERVER", "ldap.example.com")
+    LDAP_PORT: int = int(os.getenv("LDAP_PORT", 389))
+    LDAP_USE_SSL: bool = os.getenv("LDAP_USE_SSL", "False").lower() == "true"
+    LDAP_USE_NTLM: bool = os.getenv("LDAP_USE_NTLM", "True").lower() == "true"
+    LDAP_BIND_DN: str = os.getenv("LDAP_BIND_DN", "CN=Service Account,OU=Users,DC=example,DC=com")
+    LDAP_BIND_PASSWORD: str = os.getenv("LDAP_BIND_PASSWORD", "")
+    LDAP_SEARCH_BASE: str = os.getenv("LDAP_SEARCH_BASE", "DC=example,DC=com")
+    LDAP_ADMIN_GROUP: str = os.getenv("LDAP_ADMIN_GROUP", "CN=Admins,OU=Groups,DC=example,DC=com")
+    LDAP_SUPERADMIN_GROUP: str = os.getenv("LDAP_SUPERADMIN_GROUP", "CN=SuperAdmins,OU=Groups,DC=example,DC=com")
+
 
 settings = Settings()
