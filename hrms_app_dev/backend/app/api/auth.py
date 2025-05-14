@@ -102,70 +102,53 @@ def get_current_active_superadmin(current_user: User = Depends(get_current_user)
         )
     return current_user
 
-# Add this to app/api/auth.py
 def create_user_from_ldap(
     db: Session, 
-    username: str, 
-    ldap_user_info: Dict[str, Any]
+    username: str
 ) -> User:
     """
-    Create a new user from LDAP authentication info.
-    
+    Create a new user based on LDAP-authenticated username.
+
     Args:
         db: Database session
         username: Username from LDAP
-        ldap_user_info: User information retrieved from LDAP
-        
+
     Returns:
         Created user object
     """
-    # Extract email from LDAP or create a default one
-    email = ldap_user_info.get('email', f"{username}@example.com")
-    
-    # Create new user with a placeholder password (actual auth is via LDAP)
+    email = f"{username}@{settings.LDAP_DOMAIN}"
+
     db_user = User(
         email=email,
         username=username,
-        hashed_password="LDAP_AUTHENTICATED_USER",  # Placeholder
-        full_name=ldap_user_info.get('full_name', username),
+        hashed_password="LDAP_AUTHENTICATED_USER",
+        full_name=username,
         is_active=True,
-        is_admin=LDAPAuth.is_admin(ldap_user_info.get('groups', [])),
-        is_super_admin=LDAPAuth.is_super_admin(ldap_user_info.get('groups', []))
+        is_admin=False,  # Default to False unless you want to define rules
+        is_super_admin=False
     )
-    
+
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
-    logger.info("User created from LDAP authentication: %s", username)
+
+    logger.info("Created user from LDAP login: %s", username)
     return db_user
 
-# Modified login_for_access_token in app/api/auth.py
 @router.post("/login", response_model=Token)
 def login_for_access_token(
     request: Request,
     db: Session = Depends(get_db), 
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
-    """Login and get access token using LDAP authentication.
-    
-    Args:
-        request: Request object to get client info
-        db: Database session
-        form_data: Login form data
-    
-    Returns:
-        Access token
-    
-    Raises:
-        HTTPException: If authentication fails
-    """
-    # First, try to authenticate with LDAP
-    auth_successful, ldap_user_info = LDAPAuth.authenticate(
-        username=form_data.username, 
+    """Login and get access token using direct LDAP auth."""
+
+    # Authenticate directly using LDAP
+    auth_successful, user_dn = LDAPAuth.authenticate(
+        username=form_data.username,
         password=form_data.password
     )
-    
+
     if not auth_successful:
         logger.warning("LDAP authentication failed for username: %s", form_data.username)
         raise HTTPException(
@@ -173,58 +156,42 @@ def login_for_access_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Check if user exists in the database
+
+    # Check for user in local DB
     user = db.query(User).filter(User.username == form_data.username).first()
-    
-    # If user doesn't exist in the database but authenticated with LDAP, create a new user
+
     if not user:
-        logger.info("User %s authenticated via LDAP but not in database, creating account", form_data.username)
-        user = create_user_from_ldap(db, form_data.username, ldap_user_info)
-    else:
-        # Update user information from LDAP
-        if ldap_user_info.get('email'):
-            user.email = ldap_user_info.get('email')
-        if ldap_user_info.get('full_name'):
-            user.full_name = ldap_user_info.get('full_name')
-            
-        # Update admin status based on LDAP groups
-        user.is_admin = LDAPAuth.is_admin(ldap_user_info.get('groups', [])) or user.is_admin
-        user.is_super_admin = LDAPAuth.is_super_admin(ldap_user_info.get('groups', [])) or user.is_super_admin
-            
-        db.add(user)
-        db.commit()
-    
+        logger.info("LDAP-authenticated user %s not in DB; creating", form_data.username)
+        user = create_user_from_ldap(db, form_data.username)
+
     if not user.is_active:
         logger.warning("Login attempt by inactive user: %s", user.username)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
         )
 
-    # Update last login time
+    # Update last login time and log login attempt
     user.last_login = datetime.now()
-    
-    # Record login history
     client_host = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    
+
     login_record = UserLoginHistory(
         user_id=user.id,
         login_time=datetime.now(),
         ip_address=client_host,
         user_agent=user_agent
     )
-    
+
     db.add(login_record)
     db.add(user)
     db.commit()
 
-    # Create access token
+    # Issue JWT token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
-    
+
     logger.info("User %s logged in successfully via LDAP", user.username)
     return {"access_token": access_token, "token_type": "bearer"}
 
