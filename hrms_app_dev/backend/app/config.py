@@ -54,5 +54,10 @@ class Settings(BaseSettings):
     class Config:
         case_sensitive = True
 
+    # LDAP SETTINGS
+    LDAP_SERVER: str = os.getenv("LDAP_SERVER", "ldap.example.com")
+    LDAP_PORT: int = int(os.getenv("LDAP_PORT", 389))
+    LDAP_DOMAIN: str = os.getenv("LDAP_DOMAIN", "example.com")
+
 
 settings = Settings()

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -15,6 +15,7 @@ from app.core.auth import (
     get_current_active_admin
 )
 from app.db.base import get_db
+from app.core.ldap import LDAPAuth
 from app.logger import logger
 from app.models.models import User, UserLoginHistory
 from app.schemas.schemas import Token, User as UserSchema, UserCreate, LoginHistory
@@ -101,68 +102,97 @@ def get_current_active_superadmin(current_user: User = Depends(get_current_user)
         )
     return current_user
 
-# Update the login_for_access_token function to track login history
+def create_user_from_ldap(
+    db: Session, 
+    username: str
+) -> User:
+    """
+    Create a new user based on LDAP-authenticated username.
+
+    Args:
+        db: Database session
+        username: Username from LDAP
+
+    Returns:
+        Created user object
+    """
+    email = f"{username}@{settings.LDAP_DOMAIN}"
+
+    db_user = User(
+        email=email,
+        username=username,
+        hashed_password="LDAP_AUTHENTICATED_USER",
+        full_name=username,
+        is_active=True,
+        is_admin=False,  # Default to False unless you want to define rules
+        is_super_admin=False
+    )
+
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+
+    logger.info("Created user from LDAP login: %s", username)
+    return db_user
+
 @router.post("/login", response_model=Token)
 def login_for_access_token(
     request: Request,
     db: Session = Depends(get_db), 
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
-    """Login and get access token.
-    
-    Args:
-        request: Request object to get client info
-        db: Database session
-        form_data: Login form data
-    
-    Returns:
-        Access token
-    
-    Raises:
-        HTTPException: If authentication fails
-    """
-    # Check if user exists
-    user = db.query(User).filter(User.username == form_data.username).first()
-    
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        logger.warning("Failed login attempt for username: %s", form_data.username)
+    """Login and get access token using direct LDAP auth."""
+
+    # Authenticate directly using LDAP
+    auth_successful, user_dn = LDAPAuth.authenticate(
+        username=form_data.username,
+        password=form_data.password
+    )
+
+    if not auth_successful:
+        logger.warning("LDAP authentication failed for username: %s", form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
+    # Check for user in local DB
+    user = db.query(User).filter(User.username == form_data.username).first()
+
+    if not user:
+        logger.info("LDAP-authenticated user %s not in DB; creating", form_data.username)
+        user = create_user_from_ldap(db, form_data.username)
+
     if not user.is_active:
         logger.warning("Login attempt by inactive user: %s", user.username)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
         )
 
-    # Update last login time
+    # Update last login time and log login attempt
     user.last_login = datetime.now()
-    
-    # Record login history
     client_host = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    
+
     login_record = UserLoginHistory(
         user_id=user.id,
         login_time=datetime.now(),
         ip_address=client_host,
         user_agent=user_agent
     )
-    
+
     db.add(login_record)
     db.add(user)
     db.commit()
 
-    # Create access token
+    # Issue JWT token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
-    
-    logger.info("User logged in successfully: %s", user.username)
+
+    logger.info("User %s logged in successfully via LDAP", user.username)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")

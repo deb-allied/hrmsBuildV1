@@ -3,7 +3,7 @@
  */
 const CONFIG = {
     // API URL - change this to match your backend URL
-    API_URL: '/api/v1',
+    API_URL: 'http://localhost:8051/api/v1',
     
     // Default map center (if no location available)
     DEFAULT_MAP_CENTER: [40.7128, -74.0060], // New York City
