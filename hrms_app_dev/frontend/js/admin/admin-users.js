@@ -225,7 +225,7 @@ class UserService {
                 <td>${user.last_login ? formatTime(user.last_login) : 'Never'}</td>
                 <td class="table-actions">
                     <button class="btn btn-primary edit-admin" data-id="${user.id}">Edit</button>
-                    ${!user.is_super_admin ? `<button class="btn btn-danger delete-admin" data-id="${user.id}">Remove Admin</button>` : ''}
+                    ${!user.is_super_admin ? `<button class="btn btn-danger delete-admin" data-id="${user.id}">Remove</button>` : ''}
                 </td>
             `;
             

@@ -72,12 +72,14 @@ class AttendanceService {
 
     /**
      * Check in at the current location
+     * @param {number} locationType - The location type (home or office)
+     * @param {number} homeAddressId - The home address ID
      * @param {number} officeId - The office ID
      * @param {number} latitude - The latitude
      * @param {number} longitude - The longitude
      * @returns {Promise<Object>} The attendance record
      */
-    static async checkIn(officeId, latitude, longitude) {
+    static async checkIn(locationType, homeAddressId, officeId, latitude, longitude) {
         try {
             if (!AuthService.isAuthenticated()) {
                 throw new Error('You must be logged in');
@@ -90,9 +92,11 @@ class AttendanceService {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
+                    location_type: locationType,
                     office_id: officeId,
-                    latitude,
-                    longitude
+                    latitude: latitude,
+                    longitude: longitude,
+                    home_address_id: homeAddressId,
                 })
             });
             
@@ -195,7 +199,7 @@ class AttendanceService {
             tableBody.appendChild(row);
             return;
         }
-        
+        console.log('Attendance records:', records);
         records.forEach(record => {
             const row = document.createElement('tr');
             
@@ -207,7 +211,10 @@ class AttendanceService {
             
             row.innerHTML = `
                 <td>${date}</td>
-                <td>Office #${record.office_id}</td>
+                <td>
+                ${record.location_type.charAt(0).toUpperCase() + record.location_type.slice(1)} 
+                ${record.office_id ?? record.home_address_id}
+                </td>
                 <td>${checkInTime}</td>
                 <td>${checkOutTime}</td>
                 <td>${duration}</td>
@@ -230,23 +237,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const { latitude, longitude } = locationService.currentPosition.coords;
-            
+
             // Get nearest office (that user is within)
             const geofenceResults = await locationService.checkGeofenceStatus(latitude, longitude);
             const withinGeofence = geofenceResults.filter(result => result.is_within_geofence);
-            
+
+            console.log('Within geofence:', geofenceResults);
+            const matchedLocation = geofenceResults.find(entry => entry.is_within_geofence);
+
+            let placeId = null;
+            let placeType = null;
+
+            if (matchedLocation) {
+            placeType = matchedLocation.location_type;
+            placeId =
+                placeType === "office"
+                ? matchedLocation.office_id
+                : matchedLocation.home_address_id;
+            }
+
+            console.log(`Place Type: ${placeType}, Place ID: ${placeId}`);
+
             if (withinGeofence.length === 0) {
                 throw new Error('You must be within an office geofence to check in');
             }
             
             // Use the nearest office that user is within
-            const office = withinGeofence.reduce((nearest, current) => {
-                return (!nearest || current.distance < nearest.distance) ? current : nearest;
-            }, null);
-            
-            // Check in
-            await AttendanceService.checkIn(office.office_id, latitude, longitude);
-            
+
+            const officeId = placeType === 'office' ? placeId : 0;
+            const homeAddressId = placeType === 'home' ? placeId : 0;
+
+            try {
+                await AttendanceService.checkIn(placeType, homeAddressId, officeId, latitude, longitude);
+            } catch (error) {
+                console.error('Error checking in: %s', error);
+                showError('Failed to check in');
+                return;
+            }
+
             // Update UI
             const status = await AttendanceService.getCurrentStatus();
             AttendanceService.updateStatusUI(status);

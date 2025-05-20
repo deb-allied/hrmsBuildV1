@@ -11,7 +11,7 @@ from app.core.auth import (
 )
 from app.db.base import get_db
 from app.logger import logger
-from app.models.models import Office, User, UserLoginHistory, AttendanceRecord
+from app.models.models import Office, User, UserLoginHistory, AttendanceRecord, UserHomeAddress
 from app.schemas.schemas import (
     AdminUserCreate,
     AdminUserUpdate,
@@ -19,6 +19,9 @@ from app.schemas.schemas import (
     OfficeCreate,
     OfficeUpdate,
     UserExtended,
+    UserHomeAddressCreate,
+    UserHomeAddressUpdate,
+    UserHomeAddress as UserHomeAddressSchema,
 )
 
 router = APIRouter()
@@ -43,7 +46,6 @@ def get_users(
     Returns:
         List of users
     """
-    # CORRECT
     users = db.query(User).order_by(User.id).offset(skip).limit(limit).all()
 
     logger.info("Admin %s retrieved user list (%d users)", current_admin.username, len(users))
@@ -257,6 +259,303 @@ def delete_user(
     logger.info("Admin %s deleted user %s", current_admin.username, user.username)
 
 
+# User Home Addresses Management (Admin)
+@router.get("/users/{user_id}/addresses", response_model=List[UserHomeAddressSchema])
+def get_user_home_addresses(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin),
+) -> Any:
+    """Get all home addresses for a user (admin only).
+    
+    Args:
+        user_id: ID of the user
+        db: Database session
+        current_admin: Current authenticated admin user
+    
+    Returns:
+        List of user home addresses
+    
+    Raises:
+        HTTPException: If user not found
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        logger.warning("Admin %s attempted to get addresses for non-existent user ID %d", 
+                     current_admin.username, user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    
+    addresses = db.query(UserHomeAddress).filter(
+        UserHomeAddress.user_id == user_id
+    ).all()
+    
+    logger.info(
+        "Admin %s retrieved %d home addresses for user %s", 
+        current_admin.username, len(addresses), user.username
+    )
+    return addresses
+
+
+@router.post("/users/{user_id}/addresses", response_model=UserHomeAddressSchema)
+def create_user_home_address(
+    *,
+    db: Session = Depends(get_db),
+    user_id: int,
+    address_in: UserHomeAddressCreate,
+    current_admin: User = Depends(get_current_active_admin),
+) -> Any:
+    """Create a new home address for a user (admin only).
+    
+    Args:
+        db: Database session
+        user_id: ID of the user
+        address_in: Home address creation data
+        current_admin: Current authenticated admin user
+    
+    Returns:
+        Created home address
+    
+    Raises:
+        HTTPException: If user not found or address type limit reached
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        logger.warning("Admin %s attempted to create address for non-existent user ID %d", 
+                     current_admin.username, user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    
+    # Check if the address type already exists
+    existing_address = db.query(UserHomeAddress).filter(
+        UserHomeAddress.user_id == user_id,
+        UserHomeAddress.address_type == address_in.address_type
+    ).first()
+    
+    if existing_address:
+        logger.warning(
+            "Admin %s attempted to create duplicate %s address for user %s", 
+            current_admin.username, address_in.address_type, user.username
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User already has a {address_in.address_type} address",
+        )
+    
+    # Create new address
+    db_address = UserHomeAddress(
+        user_id=user_id,
+        address_type=address_in.address_type,
+        address_line1=address_in.address_line1,
+        address_line2=address_in.address_line2,
+        city=address_in.city,
+        state=address_in.state,
+        country=address_in.country,
+        postal_code=address_in.postal_code,
+        latitude=address_in.latitude,
+        longitude=address_in.longitude,
+        is_current=address_in.is_current,
+    )
+    
+    db.add(db_address)
+    db.commit()
+    db.refresh(db_address)
+    
+    logger.info(
+        "Admin %s created %s home address for user %s", 
+        current_admin.username, address_in.address_type, user.username
+    )
+    return db_address
+
+# User Home Addresses Management (Admin)
+@router.get("/users/{user_id}/addresses/{address_id}", response_model=UserHomeAddressSchema)
+def get_user_home_address(
+    user_id: int,
+    address_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin),
+) -> Any:
+    """Get a specific home address for a user (admin only).
+    
+    Args:
+        user_id: ID of the user
+        address_id: ID of the address
+        db: Database session
+        current_admin: Current authenticated admin user
+    
+    Returns:
+        User home address
+
+    Raises:
+        HTTPException: If user not found
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        logger.warning("Admin %s attempted to get addresses for non-existent user ID %d", 
+                     current_admin.username, user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    address = db.query(UserHomeAddress).filter(
+        UserHomeAddress.user_id == user_id,
+        UserHomeAddress.id == address_id
+    ).first()
+
+    if not address:
+        logger.warning(
+            "Admin %s attempted to get non-existent address ID %d for user %s", 
+            current_admin.username, address_id, user.username
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Address not found"
+        )
+
+    logger.info(
+        "Admin %s retrieved home address %d for user %s", 
+        current_admin.username, address.id, user.username
+    )
+    return address
+
+@router.put("/users/{user_id}/addresses/{address_id}", response_model=UserHomeAddressSchema)
+def update_user_home_address(
+    *,
+    db: Session = Depends(get_db),
+    user_id: int,
+    address_id: int,
+    address_in: UserHomeAddressUpdate,
+    current_admin: User = Depends(get_current_active_admin),
+) -> Any:
+    """Update a home address for a user (admin only).
+    
+    Args:
+        db: Database session
+        user_id: ID of the user
+        address_id: ID of the address to update
+        address_in: Address update data
+        current_admin: Current authenticated admin user
+    
+    Returns:
+        Updated home address
+    
+    Raises:
+        HTTPException: If user or address not found
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        logger.warning("Admin %s attempted to update address for non-existent user ID %d", 
+                     current_admin.username, user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    
+    address = db.query(UserHomeAddress).filter(
+        UserHomeAddress.id == address_id,
+        UserHomeAddress.user_id == user_id
+    ).first()
+    
+    if not address:
+        logger.warning(
+            "Admin %s attempted to update non-existent address ID %d for user %s", 
+            current_admin.username, address_id, user.username
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Address not found"
+        )
+    
+    # Check if changing address type will create a duplicate
+    if address_in.address_type and address_in.address_type != address.address_type:
+        existing_address = db.query(UserHomeAddress).filter(
+            UserHomeAddress.user_id == user_id,
+            UserHomeAddress.address_type == address_in.address_type,
+            UserHomeAddress.id != address_id
+        ).first()
+        
+        if existing_address:
+            logger.warning(
+                "Admin %s attempted to create duplicate %s address for user %s", 
+                current_admin.username, address_in.address_type, user.username
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"User already has a {address_in.address_type} address",
+            )
+    
+    # Update address fields
+    update_data = address_in.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(address, field, value)
+    
+    address.updated_at = datetime.now()
+    
+    db.add(address)
+    db.commit()
+    db.refresh(address)
+    
+    logger.info(
+        "Admin %s updated %s home address for user %s", 
+        current_admin.username, address.address_type, user.username
+    )
+    return address
+
+
+@router.delete("/users/{user_id}/addresses/{address_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user_home_address(
+    *,
+    db: Session = Depends(get_db),
+    user_id: int,
+    address_id: int,
+    current_admin: User = Depends(get_current_active_admin),
+) -> None:
+    """Delete a home address for a user (admin only).
+    
+    Args:
+        db: Database session
+        user_id: ID of the user
+        address_id: ID of the address to delete
+        current_admin: Current authenticated admin user
+    
+    Raises:
+        HTTPException: If user or address not found
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        logger.warning("Admin %s attempted to delete address for non-existent user ID %d", 
+                     current_admin.username, user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    
+    address = db.query(UserHomeAddress).filter(
+        UserHomeAddress.id == address_id,
+        UserHomeAddress.user_id == user_id
+    ).first()
+    
+    if not address:
+        logger.warning(
+            "Admin %s attempted to delete non-existent address ID %d for user %s", 
+            current_admin.username, address_id, user.username
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Address not found"
+        )
+    
+    db.delete(address)
+    db.commit()
+    
+    logger.info(
+        "Admin %s deleted %s home address for user %s", 
+        current_admin.username, address.address_type, user.username
+    )
+
+
 # Login History Endpoints
 @router.get("/login-history", response_model=List[LoginHistory])
 def get_login_history(
@@ -318,10 +617,29 @@ def get_dashboard_stats(
     # Count offices
     total_offices = db.query(Office).count()
     
+    # Count home addresses
+    total_home_addresses = db.query(UserHomeAddress).count()
+    
     # Count today's attendance
     today = datetime.now().date()
     today_attendance = db.query(AttendanceRecord).filter(
         AttendanceRecord.check_in_time >= today
+    ).count()
+    
+    # Count by location type
+    office_attendance = db.query(AttendanceRecord).filter(
+        AttendanceRecord.check_in_time >= today,
+        AttendanceRecord.location_type == "office"
+    ).count()
+    
+    home_attendance = db.query(AttendanceRecord).filter(
+        AttendanceRecord.check_in_time >= today,
+        AttendanceRecord.location_type == "home"
+    ).count()
+    
+    other_attendance = db.query(AttendanceRecord).filter(
+        AttendanceRecord.check_in_time >= today,
+        AttendanceRecord.location_type == "other"
     ).count()
     
     # Count active logins
@@ -343,8 +661,16 @@ def get_dashboard_stats(
         "offices": {
             "total": total_offices
         },
+        "home_addresses": {
+            "total": total_home_addresses
+        },
         "attendance": {
-            "today": today_attendance
+            "today": {
+                "total": today_attendance,
+                "office": office_attendance,
+                "home": home_attendance,
+                "other": other_attendance
+            }
         },
         "logins": {
             "active": active_logins,

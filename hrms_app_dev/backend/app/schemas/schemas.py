@@ -1,7 +1,77 @@
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, validator
+
+
+# Enum for location types
+class LocationType(str, Enum):
+    """Enum for different location types for attendance."""
+    OFFICE = "office"
+    HOME = "home"
+    OTHER = "other"
+
+
+# User Home Address Schemas
+class AddressType(str, Enum):
+    """Enum for types of home addresses."""
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
+
+
+class UserHomeAddressBase(BaseModel):
+    """Base schema for user home address data."""
+    
+    address_type: AddressType
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    country: str
+    postal_code: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    is_current: bool = True
+
+
+class UserHomeAddressCreate(UserHomeAddressBase):
+    """Schema for creating a new home address."""
+    
+    pass
+
+
+class UserHomeAddressUpdate(BaseModel):
+    """Schema for updating a home address."""
+    
+    address_type: Optional[AddressType] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    postal_code: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    is_current: Optional[bool] = None
+
+
+class UserHomeAddressInDB(UserHomeAddressBase):
+    """Schema for home address data as stored in DB."""
+    
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class UserHomeAddress(UserHomeAddressInDB):
+    """Schema for home address response data."""
+    
+    pass
 
 
 # User Schemas
@@ -76,7 +146,7 @@ class AdminUserUpdate(BaseModel):
 class UserExtended(User):
     """Schema for extended User response with additional fields."""
     
-    pass
+    home_addresses: Optional[List[UserHomeAddress]] = []
 
 
 # Office Schemas
@@ -128,15 +198,29 @@ class AttendanceBase(BaseModel):
     """Base schema for Attendance data."""
     
     user_id: int
-    office_id: int
+    location_type: LocationType
 
 
 class CheckInCreate(BaseModel):
     """Schema for creating a check-in."""
     
-    office_id: int
+    location_type: LocationType
     latitude: float
     longitude: float
+    office_id: Optional[int] = None
+    home_address_id: Optional[int] = None
+    
+    @validator('office_id')
+    def validate_office_id(cls, v, values):
+        if values.get('location_type') == LocationType.OFFICE and not v:
+            raise ValueError('office_id is required when location_type is OFFICE')
+        return v
+    
+    @validator('home_address_id')
+    def validate_home_address_id(cls, v, values):
+        if values.get('location_type') == LocationType.HOME and not v:
+            raise ValueError('home_address_id is required when location_type is HOME')
+        return v
 
 
 class CheckOutCreate(BaseModel):
@@ -146,10 +230,14 @@ class CheckOutCreate(BaseModel):
     longitude: float
 
 
-class AttendanceRecord(AttendanceBase):
+class AttendanceRecord(BaseModel):
     """Schema for Attendance response data."""
     
     id: int
+    user_id: int
+    location_type: LocationType
+    office_id: Optional[int] = None
+    home_address_id: Optional[int] = None
     check_in_time: datetime
     check_out_time: Optional[datetime] = None
     check_in_latitude: float
@@ -209,12 +297,16 @@ class LocationCheck(BaseModel):
     latitude: float
     longitude: float
     office_id: Optional[int] = None  # If not provided, check against all offices
+    home_address_id: Optional[int] = None  # For checking against home address
 
 
 class GeofenceStatus(BaseModel):
     """Schema for geofence status response."""
     
     is_within_geofence: bool
+    location_type: Optional[LocationType] = None
     office_id: Optional[int] = None
     office_name: Optional[str] = None
+    home_address_id: Optional[int] = None
+    address_type: Optional[str] = None
     distance: Optional[float] = None  # Distance in meters

@@ -12,7 +12,8 @@ from app.logger import logger
 engine = create_engine(
     settings.SQLALCHEMY_DATABASE_URI,
     # Comment the below lines for local postgres development
-    connect_args={"fast_executemany": True},
+    # Edit before Deployment
+    # connect_args={"fast_executemany": True},
     pool_pre_ping=True,
 )
 

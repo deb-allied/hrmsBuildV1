@@ -16,13 +16,15 @@ const CONFIG = {
     STORAGE_USER_KEY: 'attendance_user',
     
     // Geofence settings
-    GEOFENCE_RADIUS_METERS: 100,
+    GEOFENCE_RADIUS_METERS: 150,
     
     // Appearance settings for map markers
     USER_MARKER_COLOR: 'blue',
     OFFICE_MARKER_COLOR: 'red',
+    HOME_ADDRESS_MARKER_COLOR: 'green',
     GEOFENCE_COLOR: 'green',
     GEOFENCE_OPACITY: 0.2,
+    GEOFENCE_HOME_RADIUS_METERS: 200,
 };
 
 /**

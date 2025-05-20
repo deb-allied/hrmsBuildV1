@@ -52,9 +52,10 @@ class AutoLogoutScheduler:
                 logger.debug("Running scheduled auto-logout task")
                 
                 # Call the auto-logout endpoint
+                # Edit before Deployment
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
-                        f"http://10.1.5.80:8080{settings.API_V1_STR}/attendance/auto-logout"
+                        f"http://10.1.5.80:8051{settings.API_V1_STR}/attendance/auto-logout"
                     )
                 
                 if response.status_code == 200:

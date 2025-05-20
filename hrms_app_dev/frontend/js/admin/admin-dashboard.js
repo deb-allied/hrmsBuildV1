@@ -26,7 +26,7 @@ class DashboardService {
             document.getElementById('active-users').textContent = `${stats.users.active} active`;
             document.getElementById('admin-users').textContent = `${stats.users.admins} admins`;
             document.getElementById('total-offices').textContent = stats.offices.total;
-            document.getElementById('today-attendance').textContent = stats.attendance.today;
+            document.getElementById('today-attendance').textContent = stats.attendance.today.home + stats.attendance.today.office;
             document.getElementById('active-logins').textContent = stats.logins.active;
             document.getElementById('today-logins').textContent = `${stats.logins.today} today`;
             
@@ -103,7 +103,7 @@ class DashboardService {
             
             // Take only the first 10
             const recentActivities = activities.slice(0, 10);
-            
+
             // Update UI
             const tableBody = document.getElementById('recent-activity-body');
             tableBody.innerHTML = '';

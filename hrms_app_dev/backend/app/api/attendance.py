@@ -9,13 +9,14 @@ from app.core.auth import get_current_active_user
 from app.core.geofence import GeofenceService
 from app.db.base import get_db
 from app.logger import logger
-from app.models.models import AttendanceRecord, Office, User
+from app.models.models import AttendanceRecord, Office, User, UserHomeAddress
 from app.schemas.schemas import (
     AttendanceRecord as AttendanceRecordSchema,
     CheckInCreate,
     CheckOutCreate,
     GeofenceStatus,
     LocationCheck,
+    LocationType,
 )
 
 router = APIRouter()
@@ -36,9 +37,11 @@ def check_location(
         current_user: Current authenticated user
     
     Returns:
-        List of geofence status for all offices or specific office
+        List of geofence status for all offices or specific office/home
     """
-    # If office_id is provided, check against that specific office
+    results = []
+    
+    # Check against office if office_id is provided
     if location_data.office_id:
         office = db.query(Office).filter(Office.id == location_data.office_id).first()
         
@@ -51,19 +54,63 @@ def check_location(
         status = GeofenceService.check_within_geofence(
             location_data.latitude, location_data.longitude, office
         )
-        
-        return [status]
+        status.location_type = LocationType.OFFICE
+        results.append(status)
     
-    # Otherwise, check against all offices
-    results = GeofenceService.check_all_geofences(
-        db, location_data.latitude, location_data.longitude
-    )
+    # Check against home address if home_address_id is provided
+    elif location_data.home_address_id:
+        home_address = db.query(UserHomeAddress).filter(
+            UserHomeAddress.id == location_data.home_address_id,
+            UserHomeAddress.user_id == current_user.id
+        ).first()
+        
+        if not home_address:
+            logger.warning(
+                "Home address not found for location check: ID %d", 
+                location_data.home_address_id
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Home address not found"
+            )
+            
+        status = GeofenceService.check_within_home_geofence(
+            location_data.latitude, location_data.longitude, home_address
+        )
+        status.location_type = LocationType.HOME
+        status.home_address_id = home_address.id
+        status.address_type = home_address.address_type
+        results.append(status)
+    
+    # Otherwise, check against all offices and user's home addresses
+    else:
+        # Check all offices
+        office_results = GeofenceService.check_all_geofences(
+            db, location_data.latitude, location_data.longitude
+        )
+        for result in office_results:
+            result.location_type = LocationType.OFFICE
+            results.append(result)
+        
+        # Check user's home addresses
+        home_addresses = db.query(UserHomeAddress).filter(
+            UserHomeAddress.user_id == current_user.id,
+            UserHomeAddress.is_current == True
+        ).all()
+        
+        for home in home_addresses:
+            if home.latitude and home.longitude:
+                status = GeofenceService.check_within_home_geofence(
+                    location_data.latitude, location_data.longitude, home
+                )
+                status.location_type = LocationType.HOME
+                status.home_address_id = home.id
+                status.address_type = home.address_type
+                results.append(status)
     
     logger.info(
-        "Location check for user %s at (%f, %f): %d offices checked",
+        "Location check for user %s at (%f, %f): %d locations checked",
         current_user.username, location_data.latitude, location_data.longitude, len(results)
     )
-    
     return results
 
 
@@ -74,7 +121,7 @@ def check_in(
     check_in_data: CheckInCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """Check in to an office.
+    """Check in to an office or home location.
     
     Args:
         db: Database session
@@ -85,17 +132,8 @@ def check_in(
         Created attendance record
     
     Raises:
-        HTTPException: If office not found or user not within geofence
+        HTTPException: If location not found or user not within geofence
     """
-    # Check if the office exists
-    office = db.query(Office).filter(Office.id == check_in_data.office_id).first()
-    
-    if not office:
-        logger.warning("Office not found for check-in: ID %d", check_in_data.office_id)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Office not found"
-        )
-    
     # Check if user is already checked in
     active_record = db.query(AttendanceRecord).filter(
         AttendanceRecord.user_id == current_user.id,
@@ -112,38 +150,121 @@ def check_in(
             detail="You are already checked in. Please check out first.",
         )
     
-    # Verify that the user is within the geofence
-    geofence_status = GeofenceService.check_within_geofence(
-        check_in_data.latitude, check_in_data.longitude, office
-    )
-    
-    if not geofence_status.is_within_geofence:
-        logger.warning(
-            "User %s attempted check-in outside geofence: %f meters from office %s",
-            current_user.username, geofence_status.distance, office.name
+    # Process based on location type
+    if check_in_data.location_type == LocationType.OFFICE:
+        # Check if the office exists
+        if not check_in_data.office_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Office ID is required for office check-in",
+            )
+            
+        office = db.query(Office).filter(Office.id == check_in_data.office_id).first()
+        
+        if not office:
+            logger.warning("Office not found for check-in: ID %d", check_in_data.office_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Office not found"
+            )
+        
+        # Verify that the user is within the office geofence
+        geofence_status = GeofenceService.check_within_geofence(
+            check_in_data.latitude, check_in_data.longitude, office
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"You are not within the geofence of the office. "
-                  f"You are {geofence_status.distance:.2f} meters away.",
+        
+        if not geofence_status.is_within_geofence:
+            logger.warning(
+                "User %s attempted check-in outside office geofence: %f meters from office %s",
+                current_user.username, geofence_status.distance, office.name
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You are not within the geofence of the office. "
+                      f"You are {geofence_status.distance:.2f} meters away.",
+            )
+        
+        # Create attendance record for office
+        attendance_record = AttendanceRecord(
+            user_id=current_user.id,
+            office_id=office.id,
+            location_type=LocationType.OFFICE,
+            check_in_time=datetime.now(),
+            check_in_latitude=check_in_data.latitude,
+            check_in_longitude=check_in_data.longitude,
         )
-    
-    # Create attendance record
-    attendance_record = AttendanceRecord(
-        user_id=current_user.id,
-        office_id=office.id,
-        check_in_time=datetime.now(),
-        check_in_latitude=check_in_data.latitude,
-        check_in_longitude=check_in_data.longitude,
-    )
+        
+        location_name = office.name
+        
+    elif check_in_data.location_type == LocationType.HOME:
+        # Check if the home address exists
+        if not check_in_data.home_address_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Home address ID is required for home check-in",
+            )
+            
+        home_address = db.query(UserHomeAddress).filter(
+            UserHomeAddress.id == check_in_data.home_address_id,
+            UserHomeAddress.user_id == current_user.id
+        ).first()
+        
+        if not home_address:
+            logger.warning(
+                "Home address not found for check-in: ID %d", 
+                check_in_data.home_address_id
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Home address not found"
+            )
+        
+        # Verify that the user is within home geofence (if lat/long are provided)
+        if home_address.latitude and home_address.longitude:
+            geofence_status = GeofenceService.check_within_home_geofence(
+                check_in_data.latitude, check_in_data.longitude, home_address
+            )
+            
+            if not geofence_status.is_within_geofence:
+                logger.warning(
+                    "User %s attempted check-in outside home geofence: %f meters from home address",
+                    current_user.username, geofence_status.distance
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"You are not within the geofence of your home address. "
+                          f"You are {geofence_status.distance:.2f} meters away.",
+                )
+        
+        # Create attendance record for home
+        attendance_record = AttendanceRecord(
+            user_id=current_user.id,
+            home_address_id=home_address.id,
+            location_type=LocationType.HOME,
+            check_in_time=datetime.now(),
+            check_in_latitude=check_in_data.latitude,
+            check_in_longitude=check_in_data.longitude,
+        )
+        
+        location_name = f"Home ({home_address.address_type})"
+        
+    else:  # LocationType.OTHER
+        # Create attendance record for other location
+        attendance_record = AttendanceRecord(
+            user_id=current_user.id,
+            location_type=LocationType.OTHER,
+            check_in_time=datetime.now(),
+            check_in_latitude=check_in_data.latitude,
+            check_in_longitude=check_in_data.longitude,
+        )
+        
+        location_name = "Other location"
     
     db.add(attendance_record)
     db.commit()
     db.refresh(attendance_record)
     
     logger.info(
-        "User %s checked in at office %s (Record ID: %d)",
-        current_user.username, office.name, attendance_record.id
+        "User %s checked in at %s (Record ID: %d)",
+        current_user.username, location_name, attendance_record.id
     )
     
     return attendance_record
@@ -156,7 +277,7 @@ def check_out(
     check_out_data: CheckOutCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """Check out from an office.
+    """Check out from any location.
     
     Args:
         db: Database session
@@ -191,9 +312,18 @@ def check_out(
     db.commit()
     db.refresh(attendance_record)
     
+    # Determine location name for logging
+    location_name = "Unknown"
+    if attendance_record.location_type == LocationType.OFFICE and attendance_record.office:
+        location_name = attendance_record.office.name
+    elif attendance_record.location_type == LocationType.HOME and attendance_record.home_address:
+        location_name = f"Home ({attendance_record.home_address.address_type})"
+    elif attendance_record.location_type == LocationType.OTHER:
+        location_name = "Other location"
+    
     logger.info(
-        "User %s checked out from office %s (Record ID: %d)",
-        current_user.username, attendance_record.office.name, attendance_record.id
+        "User %s checked out from %s (Record ID: %d)",
+        current_user.username, location_name, attendance_record.id
     )
     
     return attendance_record
@@ -237,10 +367,19 @@ async def auto_logout_expired_sessions(
         db.add(record)
         updated_records.append(record)
         
+        # Determine location name for logging
+        location_name = "Unknown"
+        if record.location_type == LocationType.OFFICE and record.office:
+            location_name = record.office.name
+        elif record.location_type == LocationType.HOME and record.home_address:
+            location_name = f"Home ({record.home_address.address_type})"
+        elif record.location_type == LocationType.OTHER:
+            location_name = "Other location"
+        
         logger.info(
-            "User %s auto-logged out from office %s after 2 hours (Record ID: %d)",
+            "User %s auto-logged out from %s after 2 hours (Record ID: %d)",
             record.user.username,
-            record.office.name,
+            location_name,
             record.id
         )
     
@@ -265,7 +404,7 @@ async def check_out_with_auto_logout(
     check_out_data: CheckOutCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """Check out from an office with auto-logout for expired sessions.
+    """Check out from any location with auto-logout for expired sessions.
     
     This endpoint combines regular check-out with auto-logout functionality.
     
@@ -294,6 +433,7 @@ def get_attendance_history(
     skip: int = 0,
     limit: int = 100,
     user_id: Optional[int] = None,
+    location_type: Optional[LocationType] = None,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """Get attendance history for the current user.
@@ -302,25 +442,32 @@ def get_attendance_history(
         db: Database session
         skip: Number of records to skip
         limit: Maximum number of records to return
+        user_id: Filter by user ID (optional)
+        location_type: Filter by location type (optional)
         current_user: Current authenticated user
     
     Returns:
         List of attendance records
     """
-    records = db.query(AttendanceRecord)
+    query = db.query(AttendanceRecord)
 
     if user_id:
-        records = records.filter(AttendanceRecord.user_id == user_id)
+        query = query.filter(AttendanceRecord.user_id == user_id)
     else:
-        records = records.filter(AttendanceRecord.user_id == current_user.id)
+        query = query.filter(AttendanceRecord.user_id == current_user.id)
+    
+    if location_type:
+        query = query.filter(AttendanceRecord.location_type == location_type)
 
-    records = records.order_by(
+    records = query.order_by(
         AttendanceRecord.check_in_time.desc()
     ).offset(skip).limit(limit).all()
     
     logger.info(
-        "Retrieved %d attendance records for user %s",
-        len(records), current_user.username
+        "Retrieved %d attendance records for user %s%s",
+        len(records), 
+        current_user.username,
+        f" with location type {location_type}" if location_type else ""
     )
     
     return records
@@ -356,9 +503,18 @@ def get_attendance_status(
             detail="No active check-in found.",
         )
     
+    # Determine location name for logging
+    location_name = "Unknown"
+    if record.location_type == LocationType.OFFICE and record.office:
+        location_name = record.office.name
+    elif record.location_type == LocationType.HOME and record.home_address:
+        location_name = f"Home ({record.home_address.address_type})"
+    elif record.location_type == LocationType.OTHER:
+        location_name = "Other location"
+    
     logger.info(
-        "Retrieved active attendance record for user %s (Record ID: %d)",
-        current_user.username, record.id
+        "Retrieved active attendance record for user %s at %s (Record ID: %d)",
+        current_user.username, location_name, record.id
     )
     
     return record

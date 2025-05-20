@@ -1,116 +1,136 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional
 
-from haversine import haversine
+import math
 from sqlalchemy.orm import Session
 
 from app.logger import logger
-from app.models.models import Office
+from app.models.models import Office, UserHomeAddress
 from app.schemas.schemas import GeofenceStatus
 
 
 class GeofenceService:
-    """Service for handling geofence-related operations."""
-    
+    """Service for geofencing calculations and checks."""
+
     @staticmethod
-    def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate the distance between two geographic coordinates.
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calculate the great circle distance between two points on Earth in meters.
         
         Args:
-            lat1: Latitude of first point
-            lon1: Longitude of first point
-            lat2: Latitude of second point
-            lon2: Longitude of second point
+            lat1: Latitude of point 1 in decimal degrees
+            lon1: Longitude of point 1 in decimal degrees
+            lat2: Latitude of point 2 in decimal degrees
+            lon2: Longitude of point 2 in decimal degrees
             
         Returns:
-            Distance in meters
+            Distance between the points in meters
         """
-        # Convert from km to meters
-        return haversine((lat1, lon1), (lat2, lon2), unit='m')
+        # Convert decimal degrees to radians
+        lat1_rad = math.radians(lat1)
+        lon1_rad = math.radians(lon1)
+        lat2_rad = math.radians(lat2)
+        lon2_rad = math.radians(lon2)
+        
+        # Haversine formula
+        dlat = lat2_rad - lat1_rad
+        dlon = lon2_rad - lon1_rad
+        a = math.sin(dlat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
+        c = 2 * math.asin(math.sqrt(a))
+        
+        # Radius of Earth in meters
+        earth_radius = 6371000
+        
+        # Calculate distance
+        distance = earth_radius * c
+        
+        return distance
 
     @classmethod
-    def check_within_geofence(
-        cls, 
-        latitude: float, 
-        longitude: float, 
-        office: Office
-    ) -> GeofenceStatus:
-        """Check if coordinates are within a specific office geofence.
+    def check_within_geofence(cls, lat: float, lon: float, office: Office) -> GeofenceStatus:
+        """Check if a location is within the geofence of an office.
         
         Args:
-            latitude: Latitude to check
-            longitude: Longitude to check
-            office: Office object with geofence parameters
+            lat: Latitude of the location to check
+            lon: Longitude of the location to check
+            office: Office object with geofence data
             
         Returns:
-            GeofenceStatus object with results
+            GeofenceStatus object with check results
         """
-        distance = cls.calculate_distance(
-            latitude, longitude, 
-            office.latitude, office.longitude
-        )
+        # Calculate distance between location and office
+        distance = cls.haversine_distance(lat, lon, office.latitude, office.longitude)
         
-        is_within = distance <= office.radius
+        # Check if within geofence radius
+        is_within_geofence = distance <= office.radius
         
-        logger.info(
-            "Location check: (%f, %f) to Office %s (%f, %f) - Distance: %f m, Within: %s",
-            latitude, longitude, office.name, office.latitude, office.longitude, 
-            distance, is_within
+        logger.debug(
+            "Geofence check for office %s: distance = %f meters, within geofence = %s",
+            office.name, distance, is_within_geofence
         )
         
         return GeofenceStatus(
-            is_within_geofence=is_within,
+            is_within_geofence=is_within_geofence,
             office_id=office.id,
             office_name=office.name,
             distance=distance
         )
+    
+    @classmethod
+    def check_within_home_geofence(cls, lat: float, lon: float, home_address: UserHomeAddress) -> GeofenceStatus:
+        """Check if a location is within the geofence of a home address.
+        
+        Args:
+            lat: Latitude of the location to check
+            lon: Longitude of the location to check
+            home_address: UserHomeAddress object with location data
+            
+        Returns:
+            GeofenceStatus object with check results
+        """
+        # Calculate distance between location and home address
+        distance = cls.haversine_distance(lat, lon, home_address.latitude, home_address.longitude)
+
+        # Using a default radius of 500 meters for home address geofence
+        home_radius = 500  # meters
+        
+        # Check if within geofence radius
+        is_within_geofence = distance <= home_radius
+        
+        logger.debug(
+            "Geofence check for home address %s: distance = %f meters, within geofence = %s",
+            home_address.address_type, distance, is_within_geofence
+        )
+        
+        return GeofenceStatus(
+            is_within_geofence=is_within_geofence,
+            home_address_id=home_address.id,
+            address_type=home_address.address_type,
+            distance=distance
+        )
 
     @classmethod
-    def check_all_geofences(
-        cls, 
-        db: Session, 
-        latitude: float, 
-        longitude: float
-    ) -> List[GeofenceStatus]:
-        """Check if coordinates are within any office geofence.
+    def check_all_geofences(cls, db: Session, lat: float, lon: float) -> List[GeofenceStatus]:
+        """Check a location against all office geofences.
         
         Args:
             db: Database session
-            latitude: Latitude to check
-            longitude: Longitude to check
+            lat: Latitude of the location to check
+            lon: Longitude of the location to check
             
         Returns:
             List of GeofenceStatus objects for all offices
         """
-        offices = db.query(Office).all()
-        results = []
+        from app.models.models import Office
         
+        # Get all offices
+        offices = db.query(Office).all()
+        
+        # Check against each office
+        results = []
         for office in offices:
-            status = cls.check_within_geofence(latitude, longitude, office)
+            status = cls.check_within_geofence(lat, lon, office)
             results.append(status)
         
+        # Sort by distance (closest first)
+        results.sort(key=lambda x: x.distance)
+        
         return results
-
-    @classmethod
-    def find_nearest_geofence(
-        cls, 
-        db: Session, 
-        latitude: float, 
-        longitude: float
-    ) -> Optional[GeofenceStatus]:
-        """Find the nearest office geofence to the given coordinates.
-        
-        Args:
-            db: Database session
-            latitude: Latitude to check
-            longitude: Longitude to check
-            
-        Returns:
-            GeofenceStatus object for the nearest office
-        """
-        results = cls.check_all_geofences(db, latitude, longitude)
-        
-        if not results:
-            return None
-            
-        # Find the result with minimum distance
-        return min(results, key=lambda x: x.distance)

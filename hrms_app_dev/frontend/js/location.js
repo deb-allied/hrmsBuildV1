@@ -7,6 +7,7 @@ class LocationService {
         this.map = null;
         this.userMarker = null;
         this.officeMarkers = [];
+        this.homeAddressMarkers = [];
         this.geofenceCircles = [];
         this.currentPosition = null;
         this.accuracyCircle = null;
@@ -59,6 +60,9 @@ class LocationService {
         
         // Load offices data
         this.loadOffices();
+
+        // Load home address data
+        this.loadHomeAddresses();
         
         // Add accuracy indicator control
         this.addAccuracyIndicator();
@@ -217,6 +221,9 @@ class LocationService {
         
         // Load offices data
         this.loadOffices();
+
+        // Load home address data
+        this.loadHomeAddresses();
         
         // Add accuracy indicator control
         this.addAccuracyIndicator();
@@ -529,6 +536,55 @@ class LocationService {
     }
 
     /**
+     * Load home address data from the API and display on map
+     */
+    async loadHomeAddresses() {
+        try {
+            if (!AuthService.isAuthenticated()) {
+                this.logger.warn('User not authenticated, skipping home address loading');
+                return;
+            }
+
+            this.logger.info('Fetching user and address data');
+
+            const user = await this.fetchAuthenticated(`${CONFIG.API_URL}/auth/me`);
+            const homeAddresses = await this.fetchAuthenticated(`${CONFIG.API_URL}/admin/users/${user.id}/addresses`);
+
+            this.logger.info(`Loaded ${homeAddresses.length} home address locations`);
+
+            this.clearHomeAddressMarkers();
+            homeAddresses.forEach(this.addHomeAddressMarker.bind(this));
+
+            return homeAddresses;
+        } catch (error) {
+            this.logger.error('Error loading home addresses: {}', error);
+            showError(`Failed to load home addresses: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Perform an authenticated fetch and return parsed JSON
+     * @param {string} url 
+     * @returns {Promise<any>}
+     */
+    async fetchAuthenticated(url) {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${AuthService.getToken()}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Request to ${url} failed: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+
+    /**
      * Add an office marker to the map
      * @param {Object} office - The office data
      */
@@ -563,6 +619,40 @@ class LocationService {
     }
 
     /**
+     * Add a home address marker to the map
+     * @param {Object} address - The home address data
+     */
+    addHomeAddressMarker(address) {
+        // Create home address marker
+        const marker = L.marker([address.latitude, address.longitude], {
+            icon: L.divIcon({
+                className: 'home-address-marker',
+                html: `<div style="background-color: ${CONFIG.HOME_ADDRESS_MARKER_COLOR}; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white;"></div>`,
+                iconSize: [15, 15],
+                iconAnchor: [7.5, 7.5]
+            })
+        }).addTo(this.map);
+
+        marker.bindPopup(`<b>${address.name}</b><br>${address.address}`);
+        this.homeAddressMarkers.push(marker);
+        this.logger.debug(`Added home address marker for ${address.name} at ${address.latitude}, ${address.longitude}`);
+        // Create geofence circle
+        const circle = L.circle([address.latitude, address.longitude], {
+            radius: CONFIG.GEOFENCE_HOME_RADIUS_METERS,
+            fillColor: CONFIG.GEOFENCE_COLOR,
+            fillOpacity: CONFIG.GEOFENCE_OPACITY,
+            color: CONFIG.GEOFENCE_COLOR,
+            weight: 1
+        }).addTo(this.map);
+
+        // Store home address data with the circle
+        circle.address = address;
+        this.geofenceCircles.push(circle);
+        
+        this.logger.debug(`Added home address marker for ${address.name} at ${address.latitude}, ${address.longitude}`);
+    }
+
+    /**
      * Clear all office markers from the map
      */
     clearOfficeMarkers() {
@@ -582,6 +672,25 @@ class LocationService {
     }
 
     /**
+     * Clear all home address markers from the map
+     */
+    clearHomeAddressMarkers() {
+        // Remove markers
+        this.homeAddressMarkers.forEach(marker => {
+            this.map.removeLayer(marker);
+        });
+        this.homeAddressMarkers = [];
+        
+        // Remove geofence circles
+        this.geofenceCircles.forEach(circle => {
+            this.map.removeLayer(circle);
+        });
+        this.geofenceCircles = [];
+        
+        this.logger.debug('Cleared all home address markers');
+    }
+
+    /**
      * Check if user is within any geofence
      * @param {number} latitude - User's latitude
      * @param {number} longitude - User's longitude
@@ -598,7 +707,8 @@ class LocationService {
             
             // Include accuracy in API request for more accurate geofence detection
             const accuracy = this.currentPosition ? this.currentPosition.coords.accuracy : null;
-            
+            let office_id = null;
+            let home_address_id = null;
             const response = await fetch(`${CONFIG.API_URL}/attendance/check-location`, {
                 method: 'POST',
                 headers: {
@@ -608,7 +718,8 @@ class LocationService {
                 body: JSON.stringify({
                     latitude,
                     longitude,
-                    accuracy: accuracy
+                    office_id, 
+                    home_address_id
                 })
             });
             
@@ -617,7 +728,7 @@ class LocationService {
             }
             
             const results = await response.json();
-            
+            console.log('Geofence check results:', results);
             // Update UI based on results
             const withinGeofence = results.some(result => result.is_within_geofence);
             

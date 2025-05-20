@@ -39,13 +39,19 @@
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-section="users">
                             <i data-feather="users"></i>
-                            <span>Users</span>
+                            <span>All Users</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-section="offices">
-                            <i data-feather="home"></i>
+                            <i data-feather="briefcase"></i>
                             <span>Offices</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="home-addresses">
+                            <i data-feather="home"></i>
+                            <span>Home Addresses</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -214,6 +220,62 @@
                                 </tr>
                             </thead>
                             <tbody id="offices-table-body">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Home Addresses Section -->
+            <section id="home-addresses-section" class="content-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i data-feather="filter"></i> Filters</h3>
+                    </div>
+                    <div class="filters">
+                        <div class="form-group">
+                            <label for="home-address-user-filter">User</label>
+                            <div class="select-wrapper">
+                                <select id="home-address-user-filter">
+                                    <option value="">All Users</option>
+                                    <!-- Options will be added dynamically -->
+                                </select>
+                                <i data-feather="chevron-down"></i>
+                            </div>
+                        </div>
+                        
+                        <button id="apply-filters" class="btn btn-primary">
+                            <i data-feather="filter"></i>
+                            <span>Apply Filters</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card map-card">
+                    <div class="card-header">
+                        <h3><i data-feather="map-pin"></i> Home Addresses</h3>
+                    </div>
+                    <div id="admin-map-home" class="admin-map-home"></div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i data-feather="list"></i> Home Addresses List</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="home-address-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Address</th>
+                                    <th>Country</th>
+                                    <th>Postal Code</th>
+                                    <th>Coordinates</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="home-addresses-table-body">
                                 <!-- Will be populated dynamically -->
                             </tbody>
                         </table>
@@ -398,7 +460,7 @@
     <div id="office-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="office-modal-title"><i data-feather="home"></i> Add Office</h2>
+                <h2 id="office-modal-title"><i data-feather="home"></i>Add Office</h2>
                 <button class="close-modal"><i data-feather="x"></i></button>
             </div>
             <div class="modal-body">
@@ -461,6 +523,123 @@
             </div>
         </div>
     </div>
+    <!-- Home Address Modal -->
+    <div id="home-address-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="home-address-modal-title"><i data-feather="home"></i> Add Home Address</h2>
+                <button class="close-modal"><i data-feather="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="home-address-form" class="form">
+                    <input type="hidden" id="home-address-id">
+
+                    <div class="form-group">
+                        <label for="home-address-type">Type</label>
+                        <div class="input-wrapper">
+                            <i data-feather="briefcase"></i>
+                            <input type="text" id="home-address-type" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="home-address-line-1">Address Line 1</label>
+                        <div class="input-wrapper">
+                            <i data-feather="map-pin"></i>
+                            <input type="text" id="home-address-line-1" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="home-address-line-2">Address Line 2</label>
+                        <div class="input-wrapper">
+                            <i data-feather="map-pin"></i>
+                            <input type="text" id="home-address-line-2">
+                        </div>
+                    </div>
+
+                    <div class="form-group  ">
+                        <label for="home-address-city">City</label>
+                        <div class="input-wrapper">
+                            <i data-feather="map-pin"></i>
+                            <input type="text" id="home-address-city" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group  ">
+                        <label for="home-address-state">State</label>
+                        <div class="input-wrapper">
+                            <i data-feather="map-pin"></i>
+                            <input type="text" id="home-address-state" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="home-address-country">Country</label>
+                        <div class="input-wrapper">
+                            <i data-feather="globe"></i>
+                            <input type="text" id="home-address-country" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="home-address-postal-code">Postal Code</label>
+                        <div class="input-wrapper">
+                            <i data-feather="map-pin"></i>
+                            <input type="text" id="home-address-postal-code" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="home-address-latitude">Latitude</label>
+                            <div class="input-wrapper">
+                                <i data-feather="navigation"></i>
+                                <input type="number" id="home-address-latitude" step="0.000001" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="home-address-longitude">Longitude</label>
+                            <div class="input-wrapper">
+                                <i data-feather="navigation"></i>
+                                <input type="number" id="home-address-longitude" step="0.000001" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="home-address-radius">Geofence Radius (meters)</label>
+                        <div class="input-wrapper">
+                            <i data-feather="circle"></i>
+                            <input type="number" id="home-address-radius" min="10" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="home-address-is-current">Is Current</label>
+                        <div class="select-wrapper">
+                            <select id="home-address-is-current" required>
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </select>
+                            <i data-feather="chevron-down"></i>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save"></i>
+                            <span>Save</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary close-modal">
+                            <i data-feather="x"></i>
+                            <span>Cancel</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Confirmation Modal -->
     <div id="confirm-modal" class="modal">
@@ -500,6 +679,7 @@
     <script src="js/admin/admin-auth.js"></script>
     <script src="js/admin/admin-users.js"></script>
     <script src="js/admin/admin-offices.js"></script>
+    <script src="js/admin/admin-homeaddresses.js"></script>
     <script src="js/admin/admin-activity.js"></script>
     <script src="js/admin/admin-dashboard.js"></script>
     <script src="js/admin/admin.js"></script>
