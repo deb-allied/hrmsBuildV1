@@ -30,7 +30,7 @@ class ActivityService {
             
             return await response.json();
         } catch (error) {
-            console.error('Error getting login history:', error);
+            console.error(`Error getting login history: ${error}`);
             showAdminError(error.message);
             return [];
         }
@@ -66,7 +66,7 @@ class ActivityService {
             
             return await response.json();
         } catch (error) {
-            console.error('Error getting attendance records:', error);
+            console.error(`Error getting attendance records: ${error}`);
             showAdminError(error.message);
             return [];
         }
@@ -113,7 +113,7 @@ class ActivityService {
             // Load attendance records if needed
             if (!activityType || activityType === 'attendance') {
                 const attendanceRecords = await ActivityService.getAttendanceRecords(userId);
-                
+                console.log('Attendance Records:', attendanceRecords);
                 activities = [
                     ...activities,
                     ...attendanceRecords.map(record => ({
@@ -125,7 +125,7 @@ class ActivityService {
                         duration: record.check_out_time ? 
                             calculateDuration(record.check_in_time, record.check_out_time) : 
                             'Active',
-                        details: `Office #${record.office_id}`,
+                        details: `${record.location_type.charAt(0).toUpperCase() + record.location_type.slice(1)} #${record.office_id ?? record.home_address_id}`,
                         raw: record
                     }))
                 ];
@@ -166,7 +166,7 @@ class ActivityService {
             
             return activities;
         } catch (error) {
-            console.error('Error loading activity log:', error);
+            console.error(`Error loading activity log: ${error}`);
             showAdminError(error.message);
         }
     }
@@ -190,7 +190,7 @@ class ActivityService {
                 userFilter.appendChild(option);
             });
         } catch (error) {
-            console.error('Error initializing user filter:', error);
+            console.error(`Error initializing user filter: ${error}`);
             showAdminError(error.message);
         }
     }
@@ -199,18 +199,53 @@ class ActivityService {
      * Initialize activity section
      */
     static async initActivitySection() {
-        // Load user filter
-        await ActivityService.initUserFilter();
-        
-        // Load initial activity data
-        await ActivityService.loadActivityLog();
-        
-        // Set up filter controls
-        document.getElementById('apply-filters').addEventListener('click', async () => {
-            const userFilter = document.getElementById('activity-user-filter').value;
-            const typeFilter = document.getElementById('activity-type-filter').value;
+        try {
+            // Load user filter
+            await ActivityService.initUserFilter();
             
-            await ActivityService.loadActivityLog(typeFilter, userFilter || null);
-        });
+            // Load initial activity data
+            await ActivityService.loadActivityLog();
+            
+            // Set up filter controls
+            // FIX: Check if the element exists before adding the event listener
+            const applyFiltersBtn = document.getElementById('apply-filters');
+            if (applyFiltersBtn) {
+                // Remove any existing listeners to prevent duplicates
+                const newBtn = applyFiltersBtn.cloneNode(true);
+                applyFiltersBtn.parentNode.replaceChild(newBtn, applyFiltersBtn);
+                
+                // Add new event listener
+                newBtn.addEventListener('click', async () => {
+                    const userFilter = document.getElementById('activity-user-filter').value;
+                    const typeFilter = document.getElementById('activity-type-filter').value;
+                    
+                    console.log(`Applying filters - User: ${userFilter}, Type: ${typeFilter}`);
+                    await ActivityService.loadActivityLog(typeFilter, userFilter || null);
+                });
+                
+                console.log('Event listener added to apply-filters button');
+            } else {
+                console.error('Apply filters button not found in the DOM');
+                // Alternative: Try to find a button with text "Apply" or similar
+                const possibleFilterButtons = Array.from(document.querySelectorAll('button')).filter(
+                    button => button.textContent.toLowerCase().includes('apply') || 
+                             button.textContent.toLowerCase().includes('filter')
+                );
+                
+                if (possibleFilterButtons.length > 0) {
+                    console.log('Found potential filter button:', possibleFilterButtons[0]);
+                    possibleFilterButtons[0].addEventListener('click', async () => {
+                        const userFilter = document.getElementById('activity-user-filter').value;
+                        const typeFilter = document.getElementById('activity-type-filter').value;
+                        
+                        await ActivityService.loadActivityLog(typeFilter, userFilter || null);
+                    });
+                    console.log('Event listener added to potential filter button');
+                }
+            }
+        } catch (error) {
+            console.error(`Error initializing activity section: ${error}`);
+            showAdminError('Failed to initialize activity section');
+        }
     }
 }

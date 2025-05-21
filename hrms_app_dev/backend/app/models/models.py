@@ -1,7 +1,8 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Enum as SQLAlchemyEnum, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -28,11 +29,43 @@ class User(Base):
     attendance_records = relationship("AttendanceRecord", back_populates="user")
     created_users = relationship("User", backref="creator", remote_side=[id])
     login_history = relationship("UserLoginHistory", back_populates="user")
+    home_addresses = relationship("UserHomeAddress", back_populates="user") 
     
     def __repr__(self):
         return f"<User {self.username}>"
 
+class UserHomeAddress(Base):
+    """Home addresses for users with a limit of 2 addresses per user."""
+    
+    __tablename__ = "hrms_user_home_addresses"
 
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("hrms_users.id"), nullable=False)
+    address_type = Column(String(50), nullable=False)  # 'primary' or 'secondary'
+    address_line1 = Column(String(255), nullable=False)
+    address_line2 = Column(String(255), nullable=True)
+    city = Column(String(100), nullable=False)
+    state = Column(String(100), nullable=False)
+    country = Column(String(100), nullable=False)
+    postal_code = Column(String(20), nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    is_current = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    # Relationship with User model
+    user = relationship("User", back_populates="home_addresses")
+    attendance_records = relationship("AttendanceRecord", back_populates="home_address")
+    
+    # Constraint to limit addresses to primary and secondary only (max 2 per user)
+    __table_args__ = (
+        UniqueConstraint('user_id', 'address_type', name='uix_user_address_type'),
+    )
+    
+    def __repr__(self):
+        return f"<UserHomeAddress {self.id} - User: {self.user_id} - Type: {self.address_type}>"
+    
 class UserLoginHistory(Base):
     """Track user login/logout activity."""
     
@@ -72,6 +105,13 @@ class Office(Base):
         return f"<Office {self.name} ({self.latitude}, {self.longitude})>"
 
 
+class LocationType(str, Enum):
+    """Enum for different location types for attendance."""
+    OFFICE = "office"
+    HOME = "home" 
+    OTHER = "other"
+
+
 class AttendanceRecord(Base):
     """Records of check-ins and check-outs for attendance tracking."""
     
@@ -79,7 +119,14 @@ class AttendanceRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("hrms_users.id"), nullable=False)
-    office_id = Column(Integer, ForeignKey("hrms_offices.id"), nullable=False)
+    
+    # Location information - both are optional now
+    office_id = Column(Integer, ForeignKey("hrms_offices.id"), nullable=True)
+    home_address_id = Column(Integer, ForeignKey("hrms_user_home_addresses.id"), nullable=True)
+    
+    # New field to track the type of location
+    location_type = Column(SQLAlchemyEnum(LocationType), nullable=False)
+    
     check_in_time = Column(DateTime, nullable=False, default=datetime.now)
     check_out_time = Column(DateTime, nullable=True)
     check_in_latitude = Column(Float, nullable=False)
@@ -87,9 +134,12 @@ class AttendanceRecord(Base):
     check_out_latitude = Column(Float, nullable=True)
     check_out_longitude = Column(Float, nullable=True)
     
+    # Relationships
     user = relationship("User", back_populates="attendance_records")
     office = relationship("Office", back_populates="attendance_records")
+    home_address = relationship("UserHomeAddress", back_populates="attendance_records")
     
     def __repr__(self):
         status = "Active" if self.check_out_time is None else "Completed"
-        return f"<AttendanceRecord {self.id} - User: {self.user_id} - Status: {status}>"
+        location = f"{self.location_type.value}"
+        return f"<AttendanceRecord {self.id} - User: {self.user_id} - Location: {location} - Status: {status}>"

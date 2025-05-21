@@ -77,6 +77,9 @@ function initNavigation() {
                 case 'offices':
                     officeService.initOfficeSection();
                     break;
+                case 'home-addresses':
+                    await homeAddressService.initHomeAddressSection();
+                    break;
                 case 'activity':
                     await ActivityService.initActivitySection();
                     break;
@@ -104,6 +107,12 @@ function initFormHandlers() {
     if (officeForm) {
         officeForm.addEventListener('submit', (e) => officeService.saveOffice(e));
         console.log('Office form handler initialized');
+    }
+    // Home address form submission
+    const homeAddressForm = document.getElementById('home-address-form');
+    if (homeAddressForm) {
+        homeAddressForm.addEventListener('submit', (e) => homeAddressService.saveHomeAddress(e));
+        console.log('Home address form handler initialized');
     }
 }
 

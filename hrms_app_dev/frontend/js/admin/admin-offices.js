@@ -443,7 +443,9 @@ class OfficeService {
         document.getElementById('section-actions').appendChild(addOfficeButton);
         
         // Initialize map
-        this.initMap();
+        if (!this.map) {
+            this.initMap();
+        }
         
         // Load offices table
         this.loadOfficesTable();
