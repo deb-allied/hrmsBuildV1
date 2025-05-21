@@ -244,7 +244,6 @@
                                 <i data-feather="chevron-down"></i>
                             </div>
                         </div>
-                        
                         <button id="apply-filters" class="btn btn-primary">
                             <i data-feather="filter"></i>
                             <span>Apply Filters</span>
@@ -535,10 +534,13 @@
                     <input type="hidden" id="home-address-id">
 
                     <div class="form-group">
-                        <label for="home-address-type">Type</label>
-                        <div class="input-wrapper">
-                            <i data-feather="briefcase"></i>
-                            <input type="text" id="home-address-type" required>
+                        <label for="home-address-is-current">Type</label>
+                        <div class="select-wrapper">
+                            <select id="home-address-is-current" required>
+                                <option value="primary">Primary</option>
+                                <option value="secondary">Secondary</option>
+                            </select>
+                            <i data-feather="chevron-down"></i>
                         </div>
                     </div>
 

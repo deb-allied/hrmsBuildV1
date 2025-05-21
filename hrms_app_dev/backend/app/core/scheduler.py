@@ -56,6 +56,7 @@ class AutoLogoutScheduler:
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
                         f"http://10.1.5.80:8051{settings.API_V1_STR}/attendance/auto-logout"
+                        # f"http://localhost:8051{settings.API_V1_STR}/attendance/auto-logout"
                     )
                 
                 if response.status_code == 200:
