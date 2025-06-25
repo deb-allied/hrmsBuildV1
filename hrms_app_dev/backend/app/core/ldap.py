@@ -29,7 +29,7 @@ class LDAPAuth:
             # Set up server (optionally use SSL/TLS)
             tls_context = ssl.create_default_context()
             tls_context.check_hostname = False
-            tls_context.verify_mode = ssl.CERT_NONE  # In production, use CERT_REQUIRED
+            tls_context.verify_mode = ssl.CERT_REQUIRED  # In production, use CERT_REQUIRED
 
             server = Server(
                 settings.LDAP_SERVER,
@@ -42,10 +42,13 @@ class LDAPAuth:
                 server,
                 user=user_upn,
                 password=password,
-                authentication=SIMPLE
+                authentication=SIMPLE,
+                auto_bind=False,
             )
-
-            logger.info("LDAP authentication successful for user: %s", username, password)
+            # connection = conn.bind()
+            
+            connection_status = conn.result
+            logger.debug("LDAP bind successful for user %s: %s", username, connection_status)
             user_dn = conn.user
             conn.unbind()
             return True, user_dn

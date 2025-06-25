@@ -192,7 +192,7 @@ def login_for_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
 
-    logger.info("User %s logged in successfully via LDAP", user.username)
+    logger.info("User %s logged in successfully no LDAP", user.username)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")
