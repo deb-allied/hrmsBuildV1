@@ -10,6 +10,8 @@ As of right now, ldap and all authentication is unbinded, and anybody can log in
 
 Please update all new code through github and manage a proper repo through that.
 
+I have explained the rest of the code to Krithika, please consult her for further queries.
+
 ### Basic File Structure
 
 hrmsbuildv1:.
